@@ -89,7 +89,7 @@ def test_parse_bool_typo_is_error(monkeypatch):
 def _run_python(code: str, **env: str) -> subprocess.CompletedProcess[str]:
     full_env = {**os.environ, "TRACKER_ENV_FILE": os.devnull, **env}
     return subprocess.run(
-        [sys.executable, "-c", code], cwd=ROOT, env=full_env, capture_output=True, text=True, timeout=60
+        [sys.executable, "-c", code], cwd=ROOT, env=full_env, capture_output=True, encoding="utf-8", timeout=60
     )
 
 
@@ -125,7 +125,7 @@ def test_env_file_in_cwd_is_ignored(tmp_path):
     env = {k: v for k, v in os.environ.items() if k != "TRACKER_TOKEN"}
     env["PYTHONPATH"] = str(ROOT)
     result = subprocess.run(
-        [sys.executable, "-c", PRINT_TOKEN], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60
+        [sys.executable, "-c", PRINT_TOKEN], cwd=tmp_path, env=env, capture_output=True, encoding="utf-8", timeout=60
     )
     assert result.stdout.strip() == ""
 
@@ -139,7 +139,7 @@ def test_env_file_from_tracker_env_file(tmp_path):
         cwd=ROOT,
         env={**env, "TRACKER_ENV_FILE": str(env_file)},
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         timeout=60,
     )
     assert result.stdout.strip() == "from-file"

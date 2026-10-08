@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # mcp 2.x переименовал FastMCP и сломал API — переход отдельной задачей
+      - dependency-name: mcp
+        update-types: ["version-update:semver-major"]
     groups:
       python-deps:
         patterns: ["*"]
