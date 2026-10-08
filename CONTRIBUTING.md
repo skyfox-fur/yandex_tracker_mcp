@@ -1,77 +1,50 @@
-# Рекомендации для участников
+# Contributing
 
-Спасибо за интерес к этому проекту! Вот как вы можете помочь.
+Thanks for your interest! Bug reports and pull requests are welcome.
 
-## Отправка issues
+## Issues
 
-- **Ошибки**: опишите шаги для воспроизведения, окружение (Python, ОС), и вывод ошибок
-- **Предложения**: объясните задачу и почему она нужна
-- Используйте соответствующий шаблон
+Use the issue templates. For bugs, include steps to reproduce, versions and the error output,
+with tokens and organization IDs removed.
 
-## Отправка pull requests
+## Pull requests
 
-1. **Fork** и **clone** репозиторий
-2. Создайте **новую branch**: `git checkout -b feature/description`
-3. Внесите изменения, соблюдая стиль кода
-4. Тестируйте локально:
+1. Fork the repository and create a branch: `git checkout -b feature/short-description`.
+2. Set up the environment:
    ```bash
+   python -m venv .venv
+   source .venv/bin/activate        # Windows: .venv\Scripts\activate
    pip install -e ".[dev]"
+   ```
+3. Make your change, with tests.
+4. Check that everything passes:
+   ```bash
    python -m pytest
    ruff check . && ruff format --check .
    ```
-5. Создайте **commit** с понятным сообщением
-6. **Push** в свой fork
-7. Откройте **Pull Request** с описанием
+5. Open a pull request describing what changed and why. CI runs the same checks.
 
-## Стиль кода
+## Adding a tool
 
-- Python 3.10+
-- `ruff check` и `ruff format` (настройки в `pyproject.toml`)
-- Тип-хинты (type hints)
-- Комментарии на русском, если нужны объяснения
+Tools live in `src/yandex_tracker_mcp/server.py`.
 
-## Добавление новых инструментов
-
-1. Добавьте функцию в `yandex_tracker_mcp.py`:
-   - читающий инструмент — `@mcp.tool(annotations=_READ)`;
-   - пишущий — `@_write_tool()` (или `@_write_tool(destructive=True)`), и `write=True` в `_request`.
-2. Docstring на русском — его видит модель.
-3. Значения из аргументов, которые попадают в путь URL, пропускайте через `_segment()`.
-4. Списки получайте через `_request_list()`, постраничные — оборачивайте в `_paged()`.
-5. Результат сериализуйте `_out()`; не возвращайте лишние поля.
-6. Добавьте тест в `tests/test_server.py` и строку в README.
-
-Пример:
+- Read tools use `@mcp.tool(annotations=_READ)`.
+- Write tools use `@_write_tool()`, or `@_write_tool(destructive=True)` when they overwrite data,
+  and pass `write=True` to `request()`.
+- The docstring is what the model sees: keep it short and precise.
+- Pass every argument that goes into a URL path through `path_segment()`; `_issue_path()` does it for issue keys.
+- Fetch lists with `request_list()` and wrap paginated ones with `paged()`.
+- Return compact JSON via `to_json()`, without fields the model does not need.
+- Add a test in `tests/test_tools.py` and a row to the tools table in `README.md`.
 
 ```python
 @_write_tool()
-async def new_tool(issue_key: str, text: str) -> str:
-    """Описание инструмента."""
-    result = await _request(
-        "POST", f"/issues/{_segment(issue_key, 'ключ задачи')}/something", body={"text": text}, write=True
-    )
-    return _out(result)
+async def add_something(issue_key: str, text: str) -> str:
+    """One-line description for the model."""
+    result = await request("POST", _issue_path(issue_key, "/something"), body={"text": text}, write=True)
+    return to_json(result)
 ```
 
-## Безопасность
+## License
 
-- ⚠️ **Никогда** не коммитьте `.env` с токенами
-- Все переменные окружения в `.env.example` должны иметь плейсхолдеры
-- Не логируйте токены или конфиденциальные данные
-
-## Использование Claude Code
-
-При разработке используйте Claude Code с этим сервером:
-
-```bash
-claude mcp add yandex-tracker-dev --scope user \
-  -e TRACKER_TOKEN=<test_token> \
-  -e TRACKER_ORG_ID=<test_org> \
-  -- python /path/to/server.py
-```
-
-Смотрите [CLAUDE.md](CLAUDE.md) для быстрого старта разработки.
-
-## Лицензия
-
-Внося код, вы соглашаетесь лицензировать его под MIT (смотрите [LICENSE](LICENSE)).
+By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).

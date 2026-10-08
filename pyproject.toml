@@ -4,16 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yandex-tracker-mcp"
-version = "0.2.0"
-description = "MCP-сервер для Яндекс Трекера (API v3): позволяет Claude и другим MCP-клиентам читать и изменять задачи"
+dynamic = ["version"]
+description = "MCP server for Yandex Tracker: lets Claude and other MCP clients read and update issues"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
-authors = [
-    {name = "skyfox-fur"},
-]
-keywords = ["mcp", "yandex", "tracker", "api", "claude"]
+authors = [{ name = "skyfox-fur" }]
+keywords = ["mcp", "model-context-protocol", "yandex", "tracker", "claude"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -36,12 +34,13 @@ dev = ["pytest>=8", "ruff>=0.6"]
 [project.urls]
 Repository = "https://github.com/skyfox-fur/yandex_tracker_mcp"
 Issues = "https://github.com/skyfox-fur/yandex_tracker_mcp/issues"
+Changelog = "https://github.com/skyfox-fur/yandex_tracker_mcp/blob/main/CHANGELOG.md"
 
 [project.scripts]
-yandex-tracker-mcp = "yandex_tracker_mcp:main"
+yandex-tracker-mcp = "yandex_tracker_mcp.server:main"
 
-[tool.setuptools]
-py-modules = ["yandex_tracker_mcp"]
+[tool.setuptools.dynamic]
+version = { attr = "yandex_tracker_mcp.__version__" }
 
 [tool.ruff]
 line-length = 120
@@ -49,7 +48,9 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "A", "SIM", "RUF"]
-ignore = ["RUF001", "RUF002", "RUF003"]  # кириллица в строках и комментариях
+
+[tool.ruff.lint.isort]
+known-first-party = ["yandex_tracker_mcp", "conftest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: "0 6 * * 1"  # раз в неделю — pip-audit ловит новые уязвимости без коммитов
+    - cron: "0 6 * * 1" # weekly, so pip-audit catches new advisories without new commits
 
 permissions:
   contents: read
@@ -41,4 +41,4 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -U pip pip-audit
-      - run: pip-audit -r requirements.txt
+      - run: pip-audit .

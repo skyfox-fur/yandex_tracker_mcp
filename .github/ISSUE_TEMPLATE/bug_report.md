@@ -1,47 +1,26 @@
 ---
-name: Сообщение об ошибке
-about: Сообщите об ошибке для улучшения проекта
-title: "[BUG] Краткое описание проблемы"
+name: Bug report
+about: Something does not work as expected
 labels: bug
-assignees: ''
-
 ---
 
-## Описание ошибки
+**What happened**
 
-Четкое и краткое описание проблемы.
+**Steps to reproduce**
+1.
+2.
 
-## Шаги для воспроизведения
+**Expected behavior**
 
-Шаги для воспроизведения ошибки:
+**Environment**
+- yandex-tracker-mcp version:
+- Python version:
+- OS:
+- MCP client (Claude Code, Claude Desktop, ...):
 
-1. Установить...
-2. Задать переменные окружения...
-3. Запустить команду...
-4. Наблюдать ошибку...
-
-## Ожидаемое поведение
-
-Какое поведение вы ожидали?
-
-## Фактическое поведение
-
-Что произошло вместо этого? Включите полный текст ошибки/traceback:
-
+**Error output**
 ```
-Paste error message/traceback here
+paste the error here
 ```
 
-## Окружение
-
-- **OS**: Windows / macOS / Linux
-- **Python версия**: (например, 3.10, 3.11)
-- **Версия пакета**: (если устанавливали через pip, выполните `pip show yandex-tracker-mcp`)
-- **Тип организации**: Yandex 360 / Yandex Cloud
-- **Тип аутентификации**: OAuth / IAM
-
-## Дополнительный контекст
-
-Добавьте любую другую полезную информацию здесь.
-
-⚠️ **Важно**: Не указывайте реальные значения токенов, ID организаций или другие конфиденциальные данные!
+> ⚠️ Remove tokens and organization IDs from logs before posting.

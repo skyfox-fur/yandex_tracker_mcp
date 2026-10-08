@@ -1,44 +1,13 @@
 ---
-name: Запрос новой функции
-about: Предложите идею улучшения проекта
-title: "[FEATURE] Краткое описание идеи"
+name: Feature request
+about: Suggest a new tool or an improvement
 labels: enhancement
-assignees: ''
-
 ---
 
-## Описание задачи
+**What do you want to do**
 
-Четкое и краткое описание того, что нужно добавить.
+**Proposed solution**
+<!-- e.g. a new tool, its parameters and what it returns -->
 
-## Проблема, которую это решает
-
-Какую задачу/проблему это решит? Как это улучшит проект?
-
-## Предложенное решение
-
-Опишите предлагаемый способ реализации.
-
-## Примеры использования
-
-Как эта функция будет использоваться? Приведите примеры кода или сценариев:
-
-```python
-# Пример использования
-result = new_tool(param1="value")
-```
-
-## Альтернативные решения
-
-Есть ли другие способы решить эту задачу?
-
-## Дополнительный контекст
-
-Добавьте любой другой контекст или скриншоты здесь.
-
-## Связь с Tracker API
-
-Если это требует вызова API Tracker, укажите:
-- URL эндпоинта в [документации API](https://yandex.cloud/ru/docs/tracker/api-reference/)
-- Требуемые права/scopes
-- Пример запроса/ответа
+**Tracker API reference**
+<!-- link to the relevant endpoint: https://yandex.cloud/en/docs/tracker/api-ref/ -->

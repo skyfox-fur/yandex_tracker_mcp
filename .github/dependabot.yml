@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: weekly
     ignore:
-      # mcp 2.x переименовал FastMCP и сломал API — переход отдельной задачей
+      # mcp 2.x renamed FastMCP and changed the API; migrating is a separate task
       - dependency-name: mcp
         update-types: ["version-update:semver-major"]
     groups:

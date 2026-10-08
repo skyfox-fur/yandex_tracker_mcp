@@ -1,51 +1,32 @@
 # yandex-tracker-mcp
 
 MCP server for Yandex Tracker API v3 (Python 3.10+, FastMCP from `mcp` 1.x, httpx, python-dotenv).
-Lets Claude and other MCP clients read/write issues, search, comment, transition, link, and log time.
 
 ## Commands
 
 ```bash
-pip install -e ".[dev]"          # editable install + pytest, ruff
-python -m pytest                 # tests use httpx.MockTransport, no real API calls
+pip install -e ".[dev]"                # editable install + pytest, ruff
+python -m pytest                       # HTTP is mocked with httpx.MockTransport
 ruff check . && ruff format --check .
-yandex-tracker-mcp               # entry point -> yandex_tracker_mcp:main
-python server.py                 # legacy launcher, same thing
+yandex-tracker-mcp                     # run the server (stdio); also: python -m yandex_tracker_mcp
 ```
 
 ## Layout
 
-- `yandex_tracker_mcp.py` — the whole server (single module)
-- `server.py` — thin shim kept so existing `claude mcp add ... server.py` setups keep working
-- `tests/` — `conftest.py` sets env **before** import (read-only mode is decided at import time)
+- `src/yandex_tracker_mcp/config.py`: env parsing and validation (`get_config()`, `READ_ONLY`, `STARTUP_ERROR`).
+  `.env` is loaded only from `TRACKER_ENV_FILE`.
+- `src/yandex_tracker_mcp/client.py`: shared `httpx.AsyncClient`, `send/request/request_list`,
+  `path_segment()` validation, and LLM-readable `RuntimeError`s.
+- `src/yandex_tracker_mcp/formatting.py`: `to_json`, `brief_issue`, `paged`, and small helpers.
+- `src/yandex_tracker_mcp/server.py`: the `mcp` instance, all tools, and `main()`.
+- `tests/conftest.py`: sets env **before** importing the package, because read-only mode is resolved at import.
+  Provides the `api` (mock HTTP) and `clean_config` fixtures.
 
-## Architecture (yandex_tracker_mcp.py)
+## Conventions
 
-- `get_config()` — cached, validated `Config` (token, auth scheme, org header, https API URL).
-  Raises `ConfigError`; `main()` reports it to stderr and exits 1 (stdout is the MCP transport).
-- `READ_ONLY` — parsed at import; invalid value ⇒ read-only + startup error. Write tools are
-  registered via `@_write_tool()` and are **not registered** in read-only mode; `_send(write=True)`
-  re-checks as defense in depth.
-- `_send()` / `_request()` / `_request_list()` — one shared `httpx.AsyncClient`; non-2xx, transport
-  errors, non-JSON and wrong shapes become `RuntimeError` with a short, LLM-readable message.
-- `_segment()` — validates every value interpolated into a URL path (blocks `../`, `?`, `#`).
-- `_paged()` — wraps list results with `page/per_page/total/total_pages/has_more` from `X-Total-*` headers.
-- `.env` is loaded only from next to the module or `TRACKER_ENV_FILE` — never from CWD.
-
-## Adding a tool
-
-```python
-@mcp.tool(annotations=_READ)  # read tool
-async def get_something(issue_key: str) -> str:
-    """Описание на русском (его видит модель)."""
-    data = await _request("GET", f"/issues/{_segment(issue_key, 'ключ задачи')}/something")
-    return _out(data)
-
-
-@_write_tool()  # write tool; destructive=True if it overwrites data
-async def do_something(issue_key: str) -> str:
-    """..."""
-    return _out(await _request("POST", f"/issues/{_segment(issue_key, 'ключ задачи')}/x", body={}, write=True))
-```
-
-Add a test in `tests/test_server.py` and a row in README. Never commit `.env` or real tokens.
+- All code, comments, docstrings and messages are in English.
+- Read tools: `@mcp.tool(annotations=_READ)`. Write tools: `@_write_tool()` + `write=True` in `request()`.
+  Write tools are not registered when `READ_ONLY`.
+- Every value interpolated into a URL path goes through `path_segment()` (`_issue_path()` for issue keys).
+- `main()` writes config errors to stderr only; stdout is the MCP transport.
+- New tool → test in `tests/test_tools.py` + row in the README table. Never commit `.env` or tokens.
