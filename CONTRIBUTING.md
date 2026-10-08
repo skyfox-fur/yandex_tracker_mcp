@@ -15,8 +15,9 @@
 3. Внесите изменения, соблюдая стиль кода
 4. Тестируйте локально:
    ```bash
-   ./setup.sh
-   python -m pytest  # если есть тесты
+   pip install -e ".[dev]"
+   python -m pytest
+   ruff check . && ruff format --check .
    ```
 5. Создайте **commit** с понятным сообщением
 6. **Push** в свой fork
@@ -25,27 +26,30 @@
 ## Стиль кода
 
 - Python 3.10+
-- PEP 8 (используйте `ruff` или `black` если есть)
-- Тип-хинты (type hints) приветствуются
-- Комментарии на русском если нужны объяснения
+- `ruff check` и `ruff format` (настройки в `pyproject.toml`)
+- Тип-хинты (type hints)
+- Комментарии на русском, если нужны объяснения
 
 ## Добавление новых инструментов
 
-1. Добавьте функцию в `server.py` с декоратором `@mcp.tool()`
-2. Добавьте docstring с описанием на русском
-3. Используйте `_request()` для API вызовов
-4. Используйте `_out()` для сериализации результатов JSON
-5. Если это пишущий инструмент, вызовите `_writable()` в начале
-6. Обновите README.md с описанием нового инструмента
+1. Добавьте функцию в `yandex_tracker_mcp.py`:
+   - читающий инструмент — `@mcp.tool(annotations=_READ)`;
+   - пишущий — `@_write_tool()` (или `@_write_tool(destructive=True)`), и `write=True` в `_request`.
+2. Docstring на русском — его видит модель.
+3. Значения из аргументов, которые попадают в путь URL, пропускайте через `_segment()`.
+4. Списки получайте через `_request_list()`, постраничные — оборачивайте в `_paged()`.
+5. Результат сериализуйте `_out()`; не возвращайте лишние поля.
+6. Добавьте тест в `tests/test_server.py` и строку в README.
 
 Пример:
 
 ```python
-@mcp.tool()
-async def new_tool(param: str) -> str:
+@_write_tool()
+async def new_tool(issue_key: str, text: str) -> str:
     """Описание инструмента."""
-    _writable()  # только для пишущих инструментов
-    result = await _request("GET", f"/path/{param}")
+    result = await _request(
+        "POST", f"/issues/{_segment(issue_key, 'ключ задачи')}/something", body={"text": text}, write=True
+    )
     return _out(result)
 ```
 

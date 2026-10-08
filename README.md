@@ -89,8 +89,15 @@ cp .env.example .env
 
 Опциональные:
 - `TRACKER_AUTH_TYPE` — `oauth` (по умолчанию) или `iam`
-- `TRACKER_READ_ONLY` — `1` для режима только чтения
-- `TRACKER_API_URL` — базовый URL API (по умолчанию `https://api.tracker.yandex.net/v3`)
+- `TRACKER_READ_ONLY` — `1`/`true`/`yes`/`on` для режима только чтения (непонятное значение — ошибка при старте)
+- `TRACKER_API_URL` — базовый URL API, только `https://` (по умолчанию `https://api.tracker.yandex.net/v3`)
+- `TRACKER_ENV_FILE` — путь к `.env`, если он лежит не рядом с `yandex_tracker_mcp.py`
+
+`.env` читается только рядом с `yandex_tracker_mcp.py` (или из `TRACKER_ENV_FILE`) — не из текущей папки,
+чтобы чужой `.env` не мог перенаправить токен. Переменные окружения важнее значений из `.env`.
+При установке через `uvx`/`pip install` модуль лежит в site-packages — передавайте переменные через
+`claude mcp add -e ...` или укажите путь к своему файлу в `TRACKER_ENV_FILE`.
+Ошибки конфигурации выводятся в stderr сразу при запуске.
 
 ## Инструменты
 
@@ -122,7 +129,12 @@ cp .env.example .env
 | `link_issues` | Создать связь между задачами |
 | `add_worklog` | Списать время по задаче |
 
-**Примечание**: инструменты записи отключаются если установлена переменная `TRACKER_READ_ONLY=1`.
+**Примечания**:
+- при `TRACKER_READ_ONLY=1` инструменты записи вообще не регистрируются — клиент их не видит;
+- списки (`search_issues`, `list_queues`, `list_users`) возвращают `{"items", "page", "total", "has_more"}` —
+  следующая страница запрашивается через `page`; `get_comments` листается курсором `after_id`;
+- ключи задач и очередей проверяются (`[A-Za-z0-9_-]`), чтобы из них нельзя было собрать путь к другому методу API;
+- у инструментов есть MCP-аннотации `readOnlyHint` / `destructiveHint`.
 
 ## Использование с Claude Code
 
@@ -198,15 +210,10 @@ whoami()
 get_issue("PROJ-123")
 
 # Поиск задач
-search_issues(query='Queue: PROJ AND Assignee: me()')
+search_issues(query="Queue: PROJ AND Assignee: me()")
 
 # Создать задачу
-create_issue(
-    queue="PROJ",
-    summary="Новая задача",
-    description="Описание",
-    assignee="john.doe"
-)
+create_issue(queue="PROJ", summary="Новая задача", description="Описание", assignee="john.doe")
 
 # Добавить комментарий
 add_comment("PROJ-123", "Готово!")
@@ -233,8 +240,9 @@ claude mcp add yandex-tracker -e TRACKER_TOKEN=<токен> ...
 Для разработки требуется Python 3.10+:
 
 ```bash
-./setup.sh              # Установить зависимости
-python -m pytest        # Запустить тесты (если есть)
+pip install -e ".[dev]"   # Зависимости + pytest и ruff
+python -m pytest          # Тесты (без обращения к настоящему API)
+ruff check . && ruff format --check .
 ```
 
 ## Поддержка
