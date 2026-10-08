@@ -49,7 +49,7 @@ def test_parse_bool_typo_is_error(monkeypatch):
 
 
 def test_all_tools_registered():
-    assert run_python(LIST_TOOLS).stdout.strip() == "21"
+    assert run_python(LIST_TOOLS).stdout.strip() == "23"
 
 
 def test_read_only_hides_write_tools():

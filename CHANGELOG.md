@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- `edit_comment` and `delete_comment` tools (destructive; hidden in read-only mode).
+
 ## 0.4.0
 
 - Attachments: `list_attachments`, `download_attachment` and `attach_file` tools; `add_comment` accepts `file_paths`.

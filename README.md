@@ -37,6 +37,8 @@ between statuses, link them, log time, and download and attach files.
 | `update_issue` | Update issue fields |
 | `add_comment` | Add a comment, optionally mentioning users and attaching files |
 | `attach_file` | Attach a local file to an issue |
+| `edit_comment` | Replace a comment's text, optionally adding files |
+| `delete_comment` | Delete a comment |
 | `transition_issue` | Move an issue to another status |
 | `link_issues` | Link two issues |
 | `add_worklog` | Log time |

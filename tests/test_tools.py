@@ -7,6 +7,8 @@ import pytest
 from conftest import run_tool
 from yandex_tracker_mcp.server import (
     create_issue,
+    delete_comment,
+    edit_comment,
     get_comments,
     get_issue,
     list_queues,
@@ -130,3 +132,63 @@ def test_tool_annotations():
     assert tools["get_issue"].annotations.readOnlyHint is True
     assert tools["create_issue"].annotations.readOnlyHint is False
     assert tools["update_issue"].annotations.destructiveHint is True
+
+
+def test_edit_comment(api):
+    api.handler = lambda r: httpx.Response(200, json={"id": 42, "updatedAt": "now", "version": 2, "text": "new"})
+    result = run_tool(edit_comment("PROJ-1", 42, "new"))
+    request = api.requests[0]
+    assert request.method == "PATCH"
+    assert request.url.path == "/v3/issues/PROJ-1/comments/42"
+    assert json.loads(request.content) == {"text": "new"}
+    assert result == {"id": 42, "updatedAt": "now", "version": 2}
+
+
+def test_edit_comment_with_files(api, tmp_path, monkeypatch, clean_config):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a.txt").write_text("a")
+
+    def handler(request):
+        if request.url.path == "/v3/attachments":
+            return httpx.Response(201, json={"id": "t1"})
+        return httpx.Response(200, json={"id": 42})
+
+    api.handler = handler
+    result = run_tool(edit_comment("PROJ-1", "42", "new", file_paths=["a.txt"]))
+    assert json.loads(api.requests[1].content) == {"text": "new", "attachmentIds": ["t1"]}
+    assert [p.rsplit("\\", 1)[-1].rsplit("/", 1)[-1] for p in result["uploaded_from"]] == ["a.txt"]
+
+
+def test_delete_comment(api):
+    api.handler = lambda r: httpx.Response(204)
+    result = run_tool(delete_comment("PROJ-1", "42"))
+    assert api.requests[0].method == "DELETE"
+    assert api.requests[0].url.path == "/v3/issues/PROJ-1/comments/42"
+    assert result == {"deleted": True, "comment_id": "42"}
+
+
+@pytest.mark.parametrize("comment_id", ["../42", "42?x=1", "4.2", ""])
+def test_comment_id_validated(api, comment_id):
+    with pytest.raises(ValueError, match="Invalid comment id"):
+        asyncio.run(delete_comment("PROJ-1", comment_id))
+    with pytest.raises(ValueError, match="Invalid comment id"):
+        asyncio.run(edit_comment("PROJ-1", comment_id, "x"))
+    assert api.requests == []
+
+
+def test_edit_comment_rejects_empty_text(api):
+    with pytest.raises(ValueError, match="text"):
+        asyncio.run(edit_comment("PROJ-1", "42", "  "))
+    assert api.requests == []
+
+
+def test_comment_tools_are_destructive():
+    tools = {t.name: t for t in asyncio.run(mcp.list_tools())}
+    assert tools["edit_comment"].annotations.destructiveHint is True
+    assert tools["delete_comment"].annotations.destructiveHint is True
+
+
+def test_comment_long_id_accepted(api):
+    api.handler = lambda r: httpx.Response(204)
+    run_tool(delete_comment("PROJ-1", "5f3c9a1b2d4e6f7a8b9c0d1e"))
+    assert api.requests[0].url.path == "/v3/issues/PROJ-1/comments/5f3c9a1b2d4e6f7a8b9c0d1e"

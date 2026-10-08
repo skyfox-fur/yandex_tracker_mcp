@@ -17,8 +17,8 @@ yandex-tracker-mcp                     # run the server (stdio); also: python -m
   `.env` is loaded only from `TRACKER_ENV_FILE`.
 - `src/yandex_tracker_mcp/client.py`: shared `httpx.AsyncClient`, `send/request/request_list`,
   `path_segment()` validation, and LLM-readable `RuntimeError`s.
-- `src/yandex_tracker_mcp/files.py`: upload policy (`resolve_upload`) and safe download names
-  (`safe_filename`, `unique_path`). `client.upload()` and `client.download()` do the HTTP part.
+- `src/yandex_tracker_mcp/files.py`: upload policy (`read_upload`) and safe downloads
+  (`safe_filename`, `create_unique`, `prepare_download_dir`). `client.upload()` and `client.download()` do the HTTP part.
 - `src/yandex_tracker_mcp/formatting.py`: `to_json`, `brief_issue`, `paged`, and small helpers.
 - `src/yandex_tracker_mcp/server.py`: the `mcp` instance, all tools, and `main()`.
 - `tests/conftest.py`: sets env **before** importing the package, because read-only mode is resolved at import.
@@ -30,6 +30,6 @@ yandex-tracker-mcp                     # run the server (stdio); also: python -m
 - Read tools: `@mcp.tool(annotations=_READ)`. Write tools: `@_write_tool()` + `write=True` in `request()`.
   Write tools are not registered when `READ_ONLY`.
 - Every value interpolated into a URL path goes through `path_segment()` (`_issue_path()` for issue keys).
-- Local files: upload only via `resolve_upload()`; write downloads only via `safe_filename()` + `unique_path()`.
+- Local files: upload only via `read_upload()`; write downloads only via `safe_filename()` + `create_unique()`.
 - `main()` writes config errors to stderr only; stdout is the MCP transport.
 - New tool → test in `tests/test_tools.py` + row in the README table. Never commit `.env` or tokens.

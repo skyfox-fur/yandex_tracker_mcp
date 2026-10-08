@@ -326,12 +326,7 @@ async def add_comment(
     file_paths: local files to attach (from the working directory or the download directory)."""
     comments_path = _issue_path(issue_key, "/comments")
     local_files = [read_upload(p) for p in file_paths or []]  # check and read all before uploading any
-    attachment_ids = []
-    for file in local_files:
-        try:
-            attachment_ids.append((await upload("/attachments", file))["id"])
-        except RuntimeError as e:
-            raise RuntimeError(f"{e}. No comment was created ({len(attachment_ids)} file(s) uploaded unused)") from e
+    attachment_ids = await _upload_temporary(local_files, "No comment was created")
     comment = await request(
         "POST",
         comments_path,
@@ -339,6 +334,43 @@ async def add_comment(
         write=True,
     )
     return to_json(pick(comment, ("id", "createdAt")) | _sources(local_files))
+
+
+@_write_tool(destructive=True)
+async def edit_comment(issue_key: str, comment_id: int | str, text: str, file_paths: list[str] | None = None) -> str:
+    """Replace the text of a comment (YFM markup is supported).
+    file_paths: local files to add to the comment (from the working directory or the download directory)."""
+    if not text.strip():
+        raise ValueError("text is empty; use delete_comment to remove a comment")
+    path = _comment_path(issue_key, comment_id)
+    local_files = [read_upload(p) for p in file_paths or []]
+    attachment_ids = await _upload_temporary(local_files, "The comment was not changed")
+    comment = await request(
+        "PATCH", path, body=drop_none({"text": text, "attachmentIds": attachment_ids or None}), write=True
+    )
+    return to_json(pick(comment, ("id", "updatedAt", "version")) | _sources(local_files))
+
+
+@_write_tool(destructive=True)
+async def delete_comment(issue_key: str, comment_id: int | str) -> str:
+    """Delete a comment. This cannot be undone."""
+    await request("DELETE", _comment_path(issue_key, comment_id), write=True)
+    return to_json({"deleted": True, "comment_id": str(comment_id)})
+
+
+def _comment_path(issue_key: str, comment_id: int | str) -> str:
+    return _issue_path(issue_key, f"/comments/{path_segment(str(comment_id), 'comment id')}")
+
+
+async def _upload_temporary(files: list[UploadFile], outcome: str) -> list[str]:
+    """Uploads files as temporary attachments; returns their IDs for attachmentIds."""
+    ids: list[str] = []
+    for file in files:
+        try:
+            ids.append((await upload("/attachments", file))["id"])
+        except RuntimeError as e:
+            raise RuntimeError(f"{e}. {outcome} ({len(ids)} file(s) uploaded unused)") from e
+    return ids
 
 
 @_write_tool()
