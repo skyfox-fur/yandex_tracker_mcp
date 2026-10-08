@@ -6,13 +6,15 @@ import sys
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
+from urllib.parse import quote
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from yandex_tracker_mcp import config
-from yandex_tracker_mcp.client import close_client, path_segment, request, request_list
+from yandex_tracker_mcp.client import close_client, download, path_segment, request, request_list, upload
+from yandex_tracker_mcp.files import UploadFile, prepare_download_dir, read_upload, safe_filename, size_limit_message
 from yandex_tracker_mcp.formatting import attr, brief_issue, drop_none, paged, pick, to_json
 
 PerPage = Annotated[int, Field(ge=1, le=100, description="Page size, 1-100")]
@@ -50,6 +52,8 @@ mcp = FastMCP(
 )
 
 _READ = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
+# Reads from Tracker but writes a new local file; available in read-only mode too.
+_LOCAL_WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True)
 
 
 def _write_tool(*, destructive: bool = False) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -129,7 +133,8 @@ async def count_issues(query: str) -> str:
 
 @mcp.tool(annotations=_READ)
 async def get_comments(issue_key: str, per_page: PerPage = 50, after_id: int | None = None) -> str:
-    """Issue comments, oldest first. If has_more is true, call again with after_id=next_after_id."""
+    """Issue comments, oldest first. If has_more is true, call again with after_id=next_after_id.
+    Files attached to a comment: list_attachments(issue_key, comment_id=<comment id>)."""
     comments, _ = await request_list(
         "GET", _issue_path(issue_key, "/comments"), params={"perPage": per_page, "id": after_id}
     )
@@ -216,6 +221,55 @@ async def list_fields() -> str:
     return to_json([{"id": f.get("id"), "name": f.get("name"), "type": attr(f.get("schema"), "type")} for f in fields])
 
 
+# ---------- Attachments ----------
+
+
+def _brief_attachment(attachment: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": attachment.get("id"),
+        "name": attachment.get("name"),
+        "size": attachment.get("size"),
+        "mimetype": attachment.get("mimetype"),
+        "createdBy": attr(attachment.get("createdBy")),
+        "createdAt": attachment.get("createdAt"),
+        "commentId": attachment.get("commentId"),
+    }
+
+
+@mcp.tool(annotations=_READ)
+async def list_attachments(issue_key: str, comment_id: str | None = None) -> str:
+    """Files attached to an issue and to its comments (commentId is set for comment files).
+    Pass comment_id to list only the files of that comment."""
+    attachments, _ = await request_list("GET", _issue_path(issue_key, "/attachments"))
+    if comment_id is not None:
+        attachments = [a for a in attachments if str(a.get("commentId")) == str(comment_id)]
+    return to_json([_brief_attachment(a) for a in attachments])
+
+
+@mcp.tool(annotations=_LOCAL_WRITE)
+async def download_attachment(issue_key: str, attachment_id: str) -> str:
+    """Download an attachment (of the issue or one of its comments) to a local file.
+    Returns the file path; read the file there to see its content."""
+    attachment_id = path_segment(attachment_id, "attachment id")
+    attachments, _ = await request_list("GET", _issue_path(issue_key, "/attachments"))
+    meta = next((a for a in attachments if str(a.get("id")) == attachment_id), None)
+    if meta is None:
+        raise ValueError(f"Attachment {attachment_id} not found in {issue_key}")
+
+    cfg = config.get_config()
+    size = meta.get("size")
+    if isinstance(size, int) and size > cfg.max_file_bytes:
+        raise RuntimeError(f"Attachment {attachment_id} is {size_limit_message(cfg.max_file_bytes)}")
+
+    name = str(meta.get("name") or "attachment")
+    url_name = quote(name, safe="") if name.strip(".") else "attachment"  # "." / ".." would change the URL path
+    url = _issue_path(issue_key, f"/attachments/{attachment_id}/{url_name}")
+    prepare_download_dir(cfg.download_dir)
+    directory = prepare_download_dir(cfg.download_dir / safe_filename(issue_key))
+    dest, written = await download(url, directory, safe_filename(name), cfg.max_file_bytes)
+    return to_json({"path": str(dest), "name": name, "size": written, "mimetype": meta.get("mimetype")})
+
+
 # ---------- Write tools ----------
 
 
@@ -262,15 +316,43 @@ async def update_issue(issue_key: str, fields: dict[str, Any]) -> str:
 
 
 @_write_tool()
-async def add_comment(issue_key: str, text: str, summonees: list[str] | None = None) -> str:
-    """Add a comment (YFM markup is supported). summonees: logins to mention."""
+async def add_comment(
+    issue_key: str,
+    text: str,
+    summonees: list[str] | None = None,
+    file_paths: list[str] | None = None,
+) -> str:
+    """Add a comment (YFM markup is supported). summonees: logins to mention.
+    file_paths: local files to attach (from the working directory or the download directory)."""
+    comments_path = _issue_path(issue_key, "/comments")
+    local_files = [read_upload(p) for p in file_paths or []]  # check and read all before uploading any
+    attachment_ids = []
+    for file in local_files:
+        try:
+            attachment_ids.append((await upload("/attachments", file))["id"])
+        except RuntimeError as e:
+            raise RuntimeError(f"{e}. No comment was created ({len(attachment_ids)} file(s) uploaded unused)") from e
     comment = await request(
         "POST",
-        _issue_path(issue_key, "/comments"),
-        body=drop_none({"text": text, "summonees": summonees or None}),
+        comments_path,
+        body=drop_none({"text": text, "summonees": summonees or None, "attachmentIds": attachment_ids or None}),
         write=True,
     )
-    return to_json(pick(comment, ("id", "createdAt")))
+    return to_json(pick(comment, ("id", "createdAt")) | _sources(local_files))
+
+
+@_write_tool()
+async def attach_file(issue_key: str, file_path: str) -> str:
+    """Attach a local file to an issue (from the working directory or the download directory)."""
+    attachments_path = _issue_path(issue_key, "/attachments")
+    file = read_upload(file_path)
+    attachment = await upload(attachments_path, file)
+    return to_json(pick(attachment, ("id", "name", "size")) | _sources([file]))
+
+
+def _sources(files: list[UploadFile]) -> dict[str, Any]:
+    """Which local files were sent, so the user can audit uploads."""
+    return {"uploaded_from": [str(f.path) for f in files]} if files else {}
 
 
 @_write_tool(destructive=True)

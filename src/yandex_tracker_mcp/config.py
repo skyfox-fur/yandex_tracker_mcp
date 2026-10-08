@@ -7,6 +7,10 @@ Variables:
   TRACKER_CLOUD_ORG_ID  Yandex Cloud organization ID (X-Cloud-Org-ID header)
   TRACKER_READ_ONLY     1/true/yes/on: write tools are not registered
   TRACKER_API_URL       API base URL, https only (default https://api.tracker.yandex.net/v3)
+  TRACKER_DOWNLOAD_DIR  where download_attachment saves files (default <temp>/yandex-tracker-mcp)
+  TRACKER_UPLOAD_DIRS   extra directories files may be uploaded from (os.pathsep-separated);
+                        the working directory and the download directory are always allowed
+  TRACKER_MAX_FILE_MB   size limit for downloads and uploads, MB (default 50)
   TRACKER_ENV_FILE      optional path to a .env file with the variables above
 
 Exactly one of TRACKER_ORG_ID / TRACKER_CLOUD_ORG_ID must be set.
@@ -16,13 +20,16 @@ Process environment variables take precedence over the .env file.
 from __future__ import annotations
 
 import os
+import tempfile
 from dataclasses import dataclass
 from functools import cache
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
 DEFAULT_API_URL = "https://api.tracker.yandex.net/v3"
+DEFAULT_MAX_FILE_MB = 50
 
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"", "0", "false", "no", "off"}
@@ -44,6 +51,9 @@ class Config:
     auth_scheme: str
     org_header: tuple[str, str]
     api_url: str
+    download_dir: Path
+    upload_roots: tuple[Path, ...]
+    max_file_bytes: int
 
     @property
     def headers(self) -> dict[str, str]:
@@ -86,7 +96,55 @@ def get_config() -> Config:
     if parts.scheme != "https" or not parts.netloc:
         raise ConfigError(f"TRACKER_API_URL={api_url!r}: an https URL is required")
 
-    return Config(token, _AUTH_SCHEMES[auth_type], org_header, api_url)
+    # Kept unresolved, so prepare_download_dir() can detect a symlink planted in its place.
+    download_dir = Path(_env("TRACKER_DOWNLOAD_DIR") or _default_download_dir()).expanduser().absolute()
+
+    return Config(
+        token=token,
+        auth_scheme=_AUTH_SCHEMES[auth_type],
+        org_header=org_header,
+        api_url=api_url,
+        download_dir=download_dir,
+        upload_roots=_upload_roots(download_dir.resolve()),
+        max_file_bytes=_parse_max_file_mb() * 1024 * 1024,
+    )
+
+
+def _default_download_dir() -> Path:
+    # Per-user name, so users of a shared /tmp do not share (or pre-create) the directory.
+    user = os.getuid() if hasattr(os, "getuid") else os.environ.get("USERNAME", "user")
+    return Path(tempfile.gettempdir()) / f"yandex-tracker-mcp-{user}"
+
+
+def is_broad_directory(path: Path) -> bool:
+    """A filesystem root, the home directory or one of its ancestors: too broad to upload files from."""
+    path = path.resolve()
+    return path == path.parent or Path.home().resolve().is_relative_to(path)
+
+
+def _upload_roots(download_dir: Path) -> tuple[Path, ...]:
+    # The working directory is chosen by the MCP client and may be "/" or the home directory;
+    # it is allowed only when it is narrower than that. Explicit directories must be narrow too.
+    roots = [p for p in (Path.cwd().resolve(), download_dir) if not is_broad_directory(p)]
+    for raw in _env("TRACKER_UPLOAD_DIRS").split(os.pathsep):
+        if not raw.strip():
+            continue
+        directory = Path(raw.strip()).expanduser().resolve()
+        if is_broad_directory(directory):
+            raise ConfigError(f"TRACKER_UPLOAD_DIRS: {directory} is too broad (a drive root or the home directory)")
+        roots.append(directory)
+    return tuple(roots)
+
+
+def _parse_max_file_mb() -> int:
+    value = _env("TRACKER_MAX_FILE_MB") or str(DEFAULT_MAX_FILE_MB)
+    try:
+        megabytes = int(value)
+    except ValueError:
+        megabytes = 0
+    if megabytes <= 0:
+        raise ConfigError(f"TRACKER_MAX_FILE_MB={value!r}: expected a positive integer")
+    return megabytes
 
 
 # Read-only mode decides which tools get registered, so it is resolved at import time.

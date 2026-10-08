@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- Attachments: `list_attachments`, `download_attachment` and `attach_file` tools; `add_comment` accepts `file_paths`.
+- New settings: `TRACKER_DOWNLOAD_DIR`, `TRACKER_UPLOAD_DIRS` and `TRACKER_MAX_FILE_MB`.
+- Uploads are restricted to allowed directories, and hidden files are never uploaded. Downloads use sanitized,
+  non-overwriting file names.
+
 ## 0.3.0
 
 - Project translated to English: code, tool descriptions, error messages and docs.

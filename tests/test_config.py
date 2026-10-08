@@ -49,15 +49,15 @@ def test_parse_bool_typo_is_error(monkeypatch):
 
 
 def test_all_tools_registered():
-    assert run_python(LIST_TOOLS).stdout.strip() == "18"
+    assert run_python(LIST_TOOLS).stdout.strip() == "21"
 
 
 def test_read_only_hides_write_tools():
-    assert run_python(LIST_TOOLS, TRACKER_READ_ONLY="1").stdout.strip() == "12"
+    assert run_python(LIST_TOOLS, TRACKER_READ_ONLY="1").stdout.strip() == "14"
 
 
 def test_read_only_typo_fails_safe_and_main_exits():
-    assert run_python(LIST_TOOLS, TRACKER_READ_ONLY="enabled").stdout.strip() == "12"
+    assert run_python(LIST_TOOLS, TRACKER_READ_ONLY="enabled").stdout.strip() == "14"
     result = run_python(RUN_MAIN, TRACKER_READ_ONLY="enabled")
     assert result.returncode == 1
     assert "TRACKER_READ_ONLY" in result.stderr

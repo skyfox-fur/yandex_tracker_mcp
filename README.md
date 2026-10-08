@@ -6,7 +6,7 @@
 
 An [MCP](https://modelcontextprotocol.io/) server for [Yandex Tracker](https://tracker.yandex.ru/)
 (API v3). It lets Claude and other MCP clients search, read and update issues, comment, move issues
-between statuses, link them and log time.
+between statuses, link them, log time, and download and attach files.
 
 ## Tools
 
@@ -26,6 +26,8 @@ between statuses, link them and log time.
 | `get_queue` | Queue details with issue types and priorities |
 | `list_users` | Organization users (paginated) |
 | `list_fields` | Global issue fields |
+| `list_attachments` | Files of an issue and its comments |
+| `download_attachment` | Save an attachment to a local file and return its path |
 
 **Write**
 
@@ -33,7 +35,8 @@ between statuses, link them and log time.
 |------|-------------|
 | `create_issue` | Create an issue |
 | `update_issue` | Update issue fields |
-| `add_comment` | Add a comment, optionally mentioning users |
+| `add_comment` | Add a comment, optionally mentioning users and attaching files |
+| `attach_file` | Attach a local file to an issue |
 | `transition_issue` | Move an issue to another status |
 | `link_issues` | Link two issues |
 | `add_worklog` | Log time |
@@ -109,6 +112,9 @@ Add to `claude_desktop_config.json` (Settings → Developer → Edit Config):
 | `TRACKER_AUTH_TYPE` | no | `oauth` (default) or `iam` |
 | `TRACKER_READ_ONLY` | no | `1`/`true`/`yes`/`on` hides all write tools |
 | `TRACKER_API_URL` | no | API base URL, https only (default `https://api.tracker.yandex.net/v3`) |
+| `TRACKER_DOWNLOAD_DIR` | no | Download directory; files go to `<dir>/<issue key>/` (default `<temp>/yandex-tracker-mcp-<user>`) |
+| `TRACKER_UPLOAD_DIRS` | no | Extra directories files may be uploaded from (`:`-separated, `;` on Windows); not a drive root or home |
+| `TRACKER_MAX_FILE_MB` | no | Size limit for downloads and uploads, MB (default `50`) |
 | `TRACKER_ENV_FILE` | no | Path to a `.env` file with the variables above (see [`.env.example`](.env.example)) |
 
 Invalid values are reported on stderr at startup, and the server exits. An unrecognized
@@ -120,8 +126,22 @@ Invalid values are reported on stderr at startup, and the server exits. An unrec
 - Issue and comment texts can contain instructions aimed at the model (prompt injection). The server
   tells the client to treat them as data. Keep write tools behind your client's confirmation prompt.
 - Arguments that go into URL paths are validated, so a tool cannot be steered to another API endpoint.
+- Uploads, so that a prompt-injected issue cannot make the model send arbitrary local files:
+  - Files may be uploaded only from the server's working directory, the download directory and
+    `TRACKER_UPLOAD_DIRS`. The working directory counts only if it is narrower than a drive root or your
+    home directory, because some clients start servers in `/` or `~`.
+  - These are always refused: hidden files and directories (`.env`, `.ssh`, `.git`, Windows hidden or system
+    files), typical secrets (`id_rsa`, `*.pem`, `*.key`, `credentials*`, `*.tfstate`, ...), `TRACKER_ENV_FILE`
+    and alternate data streams.
+  - Symlinks are resolved before the checks. The file is read right away and verified to be the file that was
+    checked. Results list the local paths that were sent.
+- Downloads are saved under a sanitized name in a per-user directory (`0700`, files `0600`) and never
+  overwrite existing files. Risky extensions such as `.lnk`, `.scf` or `.bat` get a `.download` suffix.
+  Downloaded content is untrusted input, like issue text.
 - `.env` is read only from `TRACKER_ENV_FILE`, never from the working directory, so a foreign `.env`
-  cannot redirect your token. The API URL must be https, and redirects are not followed.
+  cannot redirect your token. The API URL must be https.
+- API calls do not follow redirects. File downloads follow up to 3 https redirects to storage. Authorization and
+  organization headers are not sent to other hosts.
 - Never commit `.env` or tokens. `.env` is git-ignored.
 
 ## Development
@@ -137,7 +157,8 @@ Project layout:
 ```
 src/yandex_tracker_mcp/
   config.py      environment variables and validation
-  client.py      shared HTTP client, error handling, path validation
+  client.py      shared HTTP client, error handling, path validation, upload/download
+  files.py       upload policy and safe local file names
   formatting.py  compact views of Tracker objects, pagination
   server.py      MCP tools and the entry point
 tests/           pytest suite
