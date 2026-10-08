@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77"]
+requires = ["setuptools>=84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -23,13 +23,13 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "mcp>=1.20,<2",
-    "httpx>=0.27",
-    "python-dotenv>=1.0",
+    "mcp>=2.3.0,<3",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.2.4",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=9.1.1", "ruff>=0.16.10"]
 
 [project.urls]
 Repository = "https://github.com/skyfox-fur/yandex_tracker_mcp"
